@@ -1,0 +1,8 @@
+{
+  "printWidth": 120,
+  "vueIndentScriptAndStyle": true,
+  "singleAttributePerLine": true,
+  "htmlWhitespaceSensitivity": "ignore",
+  "singleQuote": true,
+  "bracketSpacing": true
+}

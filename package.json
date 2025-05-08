@@ -1,0 +1,34 @@
+{
+  "version": "1.0.0",
+  "description": "webcodecs player",
+  "packageManager": "pnpm@9.15.5",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "prepare": "husky",
+    "ts-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "webcodecs player"
+  ],
+  "author": "Vivien",
+  "dependencies": {
+    "mp4box": "^0.5.4"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.0",
+    "@commitlint/config-conventional": "^19.8.0",
+    "@eslint/js": "^9.25.1",
+    "eslint": "^9.25.1",
+    "eslint-plugin-vue": "^10.0.0",
+    "globals": "^16.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.1",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.31.0",
+    "vite": "^6.3.1",
+    "vite-plugin-dts": "^4.5.3",
+    "vite-plugin-externalize-deps": "^0.9.0"
+  }
+}
