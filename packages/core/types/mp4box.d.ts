@@ -25,6 +25,7 @@ declare module 'mp4box' {
 
   export interface MP4VideoTrack extends MP4MediaTrack {
     video: MP4VideoData;
+    type: 'video';
   }
 
   export interface MP4AudioData {
@@ -35,6 +36,7 @@ declare module 'mp4box' {
 
   export interface MP4AudioTrack extends MP4MediaTrack {
     audio: MP4AudioData;
+    type: 'audio';
   }
 
   export type MP4Track = MP4VideoTrack | MP4AudioTrack;
@@ -103,7 +105,6 @@ declare module 'mp4box' {
         };
       };
     };
-    // TODO: Complete interface
   }
 
   export interface MP4File {
@@ -119,6 +120,27 @@ declare module 'mp4box' {
     releaseUsedSamples(trackId: number, sampleNumber: number): void;
     setExtractionOptions(trackId: number, user?: object, options?: { nbSamples?: number; rapAlignment?: number }): void;
     getTrackById(trackId: number): Trak;
+
+    moov: {
+      traks: MoovTrak[];
+    };
+    stream: any;
+  }
+
+  interface MoovTrak {
+    mdia: {
+      hdlr: { handler: 'vide' | 'soun' };
+      minf: any;
+    };
+    samples: Array<{
+      number: number;
+      is_sync: boolean;
+      cts: number;
+      duration: number;
+      timescale: number;
+      offset: number;
+      size: number;
+    }>;
   }
 
   export function createFile(): MP4File;

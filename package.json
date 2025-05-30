@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "prepare": "husky",
-    "ts-check": "tsc -p tsconfig.json --noEmit"
+    "type-check": "turbo run type-check"
   },
   "keywords": [
     "webcodecs player"
@@ -25,6 +25,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^15.5.1",
     "prettier": "^3.5.3",
+    "turbo": "^2.5.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.31.0",
     "vite": "^6.3.1",

@@ -8,9 +8,10 @@
     "mp4box",
     "video player"
   ],
-  "main": "index.js",
+  "main": "dist/index.es.js",
   "scripts": {
-    "dev": "vite build --watch"
+    "dev": "vite build --watch",
+    "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "mp4box": "^0.5.4"
