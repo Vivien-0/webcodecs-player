@@ -8,6 +8,8 @@ export default class SourceLoader {
     this.#url = url;
   }
 
+  requestRange(byteStart: number, byteEnd: number, options?: { fullResponse: false }): Promise<ArrayBuffer>;
+  requestRange(byteStart: number, byteEnd: number, options?: { fullResponse: true }): Promise<Response>;
   async requestRange(byteStart: number, byteEnd: number, options?: { fullResponse: boolean }) {
     try {
       const response = await fetch(this.#url, {

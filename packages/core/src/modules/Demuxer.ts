@@ -1,12 +1,16 @@
-import SourceLoader from '@/modules/SourceLoader.ts';
 import * as MP4Box from 'mp4box';
-import type { MediaInfo, onPlayerError } from '@/types';
-import type { MP4ArrayBuffer, MP4Info } from 'mp4box';
+import SourceLoader from '@/modules/SourceLoader.ts';
 import PlayerError from '@/modules/helpers/PlayerError.ts';
+import type { MediaInfo, onPlayerError, VideoSamples } from '@/types';
+import type { MP4ArrayBuffer, MP4Info } from 'mp4box';
 
 export default class Demuxer {
   #sourceLoader: SourceLoader;
   #totalFileSize!: number;
+  #videoSamples!: VideoSamples;
+  #keyVideoSamples!: VideoSamples;
+  #encodedVideoChunksQueue: Array<EncodedVideoChunk[]> = [];
+  #curKeySampleIndex = -1;
 
   #onError: onPlayerError;
 
@@ -51,35 +55,38 @@ export default class Demuxer {
         codec,
       } = videoTrack;
       const { start, size } = rawVideoTrack.mdia.minf.stbl.stsd.entries[0].avcC;
-      const description = mp4boxFile.stream.buffers[0]?.slice(start, start + size).slice(8);
+      const description = moovBuffer
+        .slice(start - ftypBuffer.byteLength, start - ftypBuffer.byteLength + size)
+        .slice(8);
 
       const mediaInfo: MediaInfo = {
         video: {
           metadata: {
             width,
             height,
-            duration: duration / timescale,
+            duration: +(duration / timescale).toFixed(3),
             totalFrames,
-            fps: totalFrames / (duration / timescale),
-            bitrate,
+            fps: +(totalFrames / (duration / timescale)).toFixed(3),
+            bitrate: +bitrate.toFixed(3),
           },
           decoderConfig: {
             codec,
             description,
           },
-          samples: rawVideoTrack.samples.map(
-            ({ number: index, is_sync: isKeyFrame, cts, duration, timescale, offset, size }) => ({
-              index,
-              isKeyFrame,
-              cts,
-              duration,
-              timescale,
-              offset,
-              size,
-            }),
-          ),
         },
       };
+      this.#videoSamples = rawVideoTrack.samples.map(
+        ({ number, is_sync: isKeyFrame, cts, duration, timescale, offset, size }) => ({
+          number,
+          isKeyFrame,
+          cts,
+          duration,
+          timescale,
+          offset,
+          size,
+        }),
+      );
+      this.#keyVideoSamples = this.#videoSamples.filter((sample) => sample.isKeyFrame);
 
       // if (audioTrack && rawAudioTrack) {
       // }
@@ -151,5 +158,47 @@ export default class Demuxer {
     }
   }
 
-  seek(frameIndex: number) {}
+  async loadEncodedVideoChunks() {
+    try {
+      const isLastKeyVideoSample = this.#curKeySampleIndex === this.#keyVideoSamples.length - 1;
+      const lastVideoSample = this.#videoSamples[this.#videoSamples.length - 1];
+      const samplesData = await this.#sourceLoader.requestRange(
+        this.#keyVideoSamples[this.#curKeySampleIndex].offset,
+        isLastKeyVideoSample
+          ? lastVideoSample.offset + lastVideoSample.size - 1
+          : this.#keyVideoSamples[this.#curKeySampleIndex + 1].offset - 1,
+      );
+      const encodedVideoChunks = this.#videoSamples
+        .slice(
+          this.#keyVideoSamples[this.#curKeySampleIndex].number,
+          isLastKeyVideoSample ? undefined : this.#keyVideoSamples[this.#curKeySampleIndex + 1].number,
+        )
+        .map(
+          (sample) =>
+            new EncodedVideoChunk({
+              type: sample.isKeyFrame ? 'key' : 'delta',
+              timestamp: (sample.cts / sample.timescale) * 1e6,
+              duration: (sample.duration / sample.timescale) * 1e6,
+              data: samplesData.slice(
+                sample.offset - this.#keyVideoSamples[this.#curKeySampleIndex].offset,
+                sample.offset - this.#keyVideoSamples[this.#curKeySampleIndex].offset + sample.size,
+              ),
+            }),
+        );
+
+      this.#encodedVideoChunksQueue[this.#curKeySampleIndex] = encodedVideoChunks;
+    } catch (e) {
+      this.#onError(e as PlayerError);
+    }
+  }
+
+  async getEncodedVideoChunks() {
+    this.#curKeySampleIndex = Math.min(this.#curKeySampleIndex + 1, this.#keyVideoSamples.length - 1);
+
+    if (!this.#encodedVideoChunksQueue[this.#curKeySampleIndex]) {
+      await this.loadEncodedVideoChunks();
+    }
+
+    return this.#encodedVideoChunksQueue[this.#curKeySampleIndex];
+  }
 }

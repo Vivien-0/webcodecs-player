@@ -35,29 +35,32 @@ export interface SeekParam {
 
 export type onPlayerError = (err: PlayerError) => void;
 
+export type VideoMetadata = Readonly<{
+  width: number;
+  height: number;
+  duration: number;
+  totalFrames: number;
+  fps: number;
+  bitrate: number;
+}>;
+
+export type VideoSamples = Array<{
+  number: number;
+  isKeyFrame: boolean;
+  cts: number;
+  duration: number;
+  timescale: number;
+  offset: number;
+  size: number;
+}>;
+
 export type MediaInfo = {
   video: {
-    metadata: {
-      width: number;
-      height: number;
-      duration: number;
-      totalFrames: number;
-      fps: number;
-      bitrate: number;
-    };
+    metadata: VideoMetadata;
     decoderConfig: {
       codec: string;
       description: ArrayBuffer;
     };
-    samples: Array<{
-      index: number;
-      isKeyFrame: boolean;
-      cts: number;
-      duration: number;
-      timescale: number;
-      offset: number;
-      size: number;
-    }>;
   };
   audio?: {
     metadata: { bitrate: number; duration: number };

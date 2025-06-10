@@ -1,7 +1,7 @@
 import Pipeline from '@/modules/Pipeline.ts';
 import EventManager from '@/modules/helpers/EventManager.ts';
 import StateManager from '@/modules/helpers/StateManager.ts';
-import type { PlayerEvent, SeekParam } from '@/types';
+import type { PlayerEvent, SeekParam, VideoMetadata } from '@/types';
 import PlayerError from '@/modules/helpers/PlayerError.ts';
 
 export default class WebcodecsPlayer {
@@ -10,14 +10,22 @@ export default class WebcodecsPlayer {
   #stateManager: StateManager = new StateManager();
   #eventManager: EventManager = new EventManager();
 
+  metadata: VideoMetadata | null = null;
+
   constructor(options: PlayerOptions) {
     const { url, containerElement, playerConfig = {} } = options;
 
     this.#playerConfig = playerConfig;
     this.#pipeline = new Pipeline(
       { containerElement, url },
-      { eventManager: this.#eventManager, stateManager: this.#stateManager, onError: this.#handleError.bind(this) },
+      {
+        eventManager: this.#eventManager,
+        stateManager: this.#stateManager,
+        onLoadMetadata: (metaData) => (this.metadata = metaData),
+        onError: (playerError) => this.#handleError(playerError),
+      },
     );
+
     this.#load();
   }
 
@@ -43,6 +51,7 @@ export default class WebcodecsPlayer {
   }
 
   async play() {
+    await this.#pipeline.play();
     this.#stateManager.setState('playing');
   }
 
