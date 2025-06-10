@@ -1,27 +1,20 @@
 import Demuxer from '@/modules/Demuxer.ts';
-import EventManager from '@/modules/helpers/EventManager.ts';
 import SourceLoader from '@/modules/SourceLoader.ts';
-import type { onPlayerError, SeekParam, VideoMetadata, VideoSamples } from '@/types';
+import type { SeekParam, VideoMetadata } from '@/types';
 import CoreVideoDecoder from '@/modules/CoreVideoDecoder.ts';
-import VideoRenderer from '@/modules/VideoRenderer.ts';
-import StateManager from '@/modules/helpers/StateManager.ts';
 import PlayerError from '@/modules/helpers/PlayerError.ts';
+import { Pipeline2PlayerData } from '@/types/worker.ts';
 
 interface PipelineConfig {
-  containerElement: HTMLElement;
   url: string;
 }
 
 export default class Pipeline {
   #config: PipelineConfig;
-  #stateManager: StateManager;
-  #eventManager: EventManager;
-  #onLoadMetadata: (metaData: VideoMetadata) => void;
-  #onError: onPlayerError;
+  #worker: DedicatedWorkerGlobalScope;
   #sourceLoader: SourceLoader;
   #demuxer: Demuxer;
   #videoDecoder!: CoreVideoDecoder;
-  #videoRenderer!: VideoRenderer;
 
   #videoMetadata!: VideoMetadata;
   #decodingQueueSize = 0;
@@ -34,37 +27,25 @@ export default class Pipeline {
   readonly maxVideoFrameCount = 10;
   readonly maxBufferCount = 20; // due to I,P,B frame, maxBufferCount shoule be larger than maxVideoFrameCount
 
-  constructor(
-    config: PipelineConfig,
-    {
-      stateManager,
-      eventManager,
-      onLoadMetadata,
-      onError,
-    }: {
-      stateManager: StateManager;
-      eventManager: EventManager;
-      onLoadMetadata: (metaData: VideoMetadata) => void;
-      onError: onPlayerError;
-    },
-  ) {
+  constructor(config: PipelineConfig, worker: DedicatedWorkerGlobalScope) {
     this.#config = config;
-    this.#stateManager = stateManager;
-    this.#eventManager = eventManager;
-    this.#onLoadMetadata = onLoadMetadata;
-    this.#onError = onError;
+    this.#worker = worker;
     this.#sourceLoader = new SourceLoader(this.#config.url);
-    this.#demuxer = new Demuxer(this.#sourceLoader, { onError: this.#onError.bind(this) });
+    this.#demuxer = new Demuxer(this.#sourceLoader, { onError: (playerError) => this.#onError(playerError) });
+  }
+
+  #postmessage2Player(data: Pipeline2PlayerData) {
+    this.#worker.postMessage(data);
   }
 
   async start() {
     try {
-      this.#eventManager.emit('loadstart');
+      this.#postmessage2Player({ type: 'emitPlayerEvent', payload: { event: 'loadstart' } });
       const { video, audio } = await this.#demuxer.loadMetadata();
       this.#videoMetadata = video.metadata;
-      this.#onLoadMetadata(video.metadata);
-      this.#eventManager.emit('loadedmetadata', video.metadata);
-      this.#stateManager.setState('loaded');
+      this.#postmessage2Player({ type: 'metadataLoaded', payload: video.metadata });
+      this.#postmessage2Player({ type: 'emitPlayerEvent', payload: { event: 'loadstart', data: video.metadata } });
+      this.#postmessage2Player({ type: 'changePlayerState', payload: 'loaded' });
 
       this.#videoDecoder = new CoreVideoDecoder({
         decoderConfig: video.decoderConfig,
@@ -75,7 +56,6 @@ export default class Pipeline {
         },
         onError: (playerError) => this.#onError(playerError),
       });
-      this.#videoRenderer = new VideoRenderer(this.#config.containerElement, this.#videoMetadata);
       this.#encodedVideoChunks = await this.#demuxer.getEncodedVideoChunks();
     } catch (e) {
       this.#onError(e as PlayerError);
@@ -108,6 +88,10 @@ export default class Pipeline {
     }
   }
 
+  #onError(error: PlayerError) {
+    this.#postmessage2Player({ type: 'error', payload: error });
+  }
+
   async play() {
     this.#schedule();
 
@@ -115,7 +99,6 @@ export default class Pipeline {
       const videoFrame = this.#videoFrameQueue.shift();
 
       if (videoFrame) {
-        this.#videoRenderer.renderVideoFrame(videoFrame);
         this.#curVideoFrameNum++;
       }
 
@@ -127,19 +110,9 @@ export default class Pipeline {
 
   resume() {}
 
-  seek(param: SeekParam) {
-    console.log(param);
-  }
+  seek(param: SeekParam) {}
 
   stop() {}
-
-  setVolume(volume: number) {
-    console.log(volume);
-  }
-
-  setMuted(muted: boolean) {
-    console.log(muted);
-  }
 
   setPlaybackRate(rate: number) {}
 }

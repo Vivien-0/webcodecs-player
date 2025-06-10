@@ -1,41 +1,87 @@
-import Pipeline from '@/modules/Pipeline.ts';
 import EventManager from '@/modules/helpers/EventManager.ts';
 import StateManager from '@/modules/helpers/StateManager.ts';
 import type { PlayerEvent, SeekParam, VideoMetadata } from '@/types';
 import PlayerError from '@/modules/helpers/PlayerError.ts';
+import VideoRenderer from '@/modules/VideoRenderer.ts';
+import { Pipeline2PlayerData, Player2PipelineData } from '@/types/worker.ts';
 
 export default class WebcodecsPlayer {
-  #playerConfig: PlayerConfig;
-  #pipeline: Pipeline;
+  #playerOptions: PlayerOptions;
+  #pipelineWorker: Worker;
   #stateManager: StateManager = new StateManager();
   #eventManager: EventManager = new EventManager();
+
+  #videoRenderer!: VideoRenderer;
 
   metadata: VideoMetadata | null = null;
 
   constructor(options: PlayerOptions) {
-    const { url, containerElement, playerConfig = {} } = options;
-
-    this.#playerConfig = playerConfig;
-    this.#pipeline = new Pipeline(
-      { containerElement, url },
-      {
-        eventManager: this.#eventManager,
-        stateManager: this.#stateManager,
-        onLoadMetadata: (metaData) => (this.metadata = metaData),
-        onError: (playerError) => this.#handleError(playerError),
-      },
-    );
-
+    this.#playerOptions = options;
+    this.#pipelineWorker = new Worker(new URL('./workers/pipeline.worker.ts', import.meta.url));
+    this.#postmessage2Worker({
+      type: 'init',
+      payload: { url: options.url },
+    });
+    this.#onmessageFromWorker();
     this.#load();
+  }
+
+  #postmessage2Worker(data: Player2PipelineData) {
+    this.#pipelineWorker.postMessage(data);
+  }
+
+  #onmessageFromWorker() {
+    this.#pipelineWorker.onmessage = (event) => {
+      const { type, payload } = event.data as Pipeline2PlayerData;
+
+      switch (type) {
+        case 'initialized': {
+          break;
+        }
+        case 'started': {
+          break;
+        }
+        case 'metadataLoaded': {
+          this.#videoRenderer = new VideoRenderer(this.#playerOptions.containerElement, payload);
+          break;
+        }
+        case 'played': {
+          break;
+        }
+        case 'seeked': {
+          break;
+        }
+        case 'paused': {
+          break;
+        }
+        case 'videoFrameDecoded': {
+          break;
+        }
+        case 'emitPlayerEvent': {
+          break;
+        }
+        case 'changePlayerState': {
+          break;
+        }
+        case 'error': {
+          break;
+        }
+        default:
+          break;
+      }
+    };
   }
 
   async #load() {
     try {
       this.#stateManager.setState('loading');
-      await this.#pipeline.start();
+      this.#postmessage2Worker({
+        type: 'start',
+        payload: null,
+      });
       this.#stateManager.setState('loaded');
 
-      if (this.#playerConfig.autoplay) {
+      if (this.#playerOptions.playerConfig?.autoplay) {
         this.play();
       }
     } catch (e) {
@@ -51,7 +97,10 @@ export default class WebcodecsPlayer {
   }
 
   async play() {
-    await this.#pipeline.play();
+    this.#postmessage2Worker({
+      type: 'play',
+      payload: null,
+    });
     this.#stateManager.setState('playing');
   }
 
@@ -61,22 +110,25 @@ export default class WebcodecsPlayer {
 
   async seek(param: SeekParam) {
     this.#stateManager.setState('seeking');
-    this.#pipeline.seek(param);
+    this.#postmessage2Worker({
+      type: 'seek',
+      payload: param,
+    });
   }
 
   destroy() {
-    this.#pipeline.stop();
+    this.#postmessage2Worker({
+      type: 'destroy',
+      payload: null,
+    });
     this.#stateManager.setState('destroyed');
   }
 
   setVolume(volume: number) {
     const vol = Math.max(0, Math.min(volume, 1));
-    this.#pipeline.setVolume(vol);
   }
 
-  setMuted(muted: boolean) {
-    this.#pipeline.setMuted(muted);
-  }
+  setMuted(muted: boolean) {}
 
   on(event: PlayerEvent, handler: Function): void {
     this.#eventManager.on(event, handler);

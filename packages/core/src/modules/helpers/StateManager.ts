@@ -16,7 +16,7 @@ export default class StateManager {
 }
 
 type onStateChange = (state: PlayerState) => void;
-type PlayerState =
+export type PlayerState =
   | 'idle' // Initial state before any media is loaded.
   | 'loading' // Media source is being loaded.
   | 'loaded' // Media metadata is loaded, player is ready to play.
